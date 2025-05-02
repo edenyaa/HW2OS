@@ -697,20 +697,23 @@ init_peterson_locks() {
 }
 
 // Create a Peterson lock.
-int peterson_create(void) {
+int 
+peterson_create(void) {
   for (int i = 0; i < MAX_PETERSON_LOCKS; i++) {
-    if (peterson_locks[i].acquired == 0) {
+    if (__sync_lock_test_and_set(&peterson_locks[i].acquired, 1) == 0) {
       peterson_locks[i].interested[0] = 0;
       peterson_locks[i].interested[1] = 0;
       peterson_locks[i].barrier = 0;
       peterson_locks[i].acquired = 1;
+      __sync_synchronize();
       return i;
     }
   }
   return -1;
 }
 // Acquire a Peterson lock.
-int peterson_acquire(int lock_id, int role) {
+int 
+peterson_acquire(int lock_id, int role) {
   if (lock_id < 0 || lock_id >= MAX_PETERSON_LOCKS || (role != 0 && role != 1))
     return -1;
 
@@ -734,12 +737,30 @@ int peterson_acquire(int lock_id, int role) {
 }
 
 // Release a Peterson lock.
-int peterson_release(int lock_id, int role) {
+int
+peterson_release(int lock_id, int role) {
   if (lock_id < 0 || lock_id >= MAX_PETERSON_LOCKS || (role != 0 && role != 1))
     return -1;
   
   struct petersonlock *lock = &peterson_locks[lock_id];
   lock->interested[role] = 0;
+  __sync_synchronize();
+  return 0;
+}
+//destroy a Peterson lock.
+int
+peterson_destroy(int lock_id){
+  if (lock_id < 0 || lock_id >= MAX_PETERSON_LOCKS)
+    return -1;
+
+  struct petersonlock *lock = &peterson_locks[lock_id];
+  if (!lock->acquired)
+    return -1;
+  lock->interested[0]= 0;
+  lock->interested[1] = 0;
+  lock->barrier = 0;
+  __sync_synchronize();
+  __sync_lock_release(&lock->acquired);
   return 0;
 }
   
