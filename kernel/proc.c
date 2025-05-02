@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "petersonlock.h"
 
 struct cpu cpus[NCPU];
 
@@ -19,6 +20,8 @@ extern void forkret(void);
 static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
+#define MAX_PETERSON_LOCKS 15
+struct petersonlock peterson_locks[MAX_PETERSON_LOCKS];
 
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
@@ -681,3 +684,65 @@ procdump(void)
     printf("\n");
   }
 }
+
+// Initialize the Peterson lock.
+void 
+init_peterson_locks() {
+  for (int i = 0; i < MAX_PETERSON_LOCKS; i++) {
+    peterson_locks[i].interested[0] = 0;
+    peterson_locks[i].interested[1] = 0;
+    peterson_locks[i].barrier = 0;
+    peterson_locks[i].acquired = 0;
+  }
+}
+
+// Create a Peterson lock.
+int peterson_create(void) {
+  for (int i = 0; i < MAX_PETERSON_LOCKS; i++) {
+    if (peterson_locks[i].acquired == 0) {
+      peterson_locks[i].interested[0] = 0;
+      peterson_locks[i].interested[1] = 0;
+      peterson_locks[i].barrier = 0;
+      peterson_locks[i].acquired = 1;
+      return i;
+    }
+  }
+  return -1;
+}
+// Acquire a Peterson lock.
+int peterson_acquire(int lock_id, int role) {
+  if (lock_id < 0 || lock_id >= MAX_PETERSON_LOCKS || (role != 0 && role != 1))
+    return -1;
+
+  struct petersonlock *lock = &peterson_locks[lock_id];
+  if (!lock->acquired)
+    return -1;
+
+  lock->interested[role] = 1;
+  lock->barrier = role;
+  __sync_synchronize();
+
+  int other = 1 - role;
+  while (1) {
+    __sync_synchronize();
+    if (!(lock->barrier == role && lock->interested[other] == 1))
+      break;
+    yield();
+  }
+
+  return 0;
+}
+
+// Release a Peterson lock.
+int peterson_release(int lock_id, int role) {
+  if (lock_id < 0 || lock_id >= MAX_PETERSON_LOCKS || (role != 0 && role != 1))
+    return -1;
+  
+  struct petersonlock *lock = &peterson_locks[lock_id];
+  lock->interested[role] = 0;
+  return 0;
+}
+  
+ 
+
+

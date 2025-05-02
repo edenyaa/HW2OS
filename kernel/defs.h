@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+#define MAX_PETERSON_LOCKS 15
 
 // bio.c
 void            binit(void);
@@ -146,6 +147,7 @@ extern uint     ticks;
 void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;
+extern struct petersonlock peterson_locks[MAX_PETERSON_LOCKS];//maybe not needed
 void            usertrapret(void);
 
 // uart.c
