@@ -7,7 +7,7 @@ int main() {
     printf("Failed to create lock\n");
     exit(1);
   }
-
+  
   int fork_ret = fork();
   int role = fork_ret > 0 ? 0 : 1;
 

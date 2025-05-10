@@ -22,6 +22,7 @@ static void freeproc(struct proc *p);
 extern char trampoline[]; // trampoline.S
 #define MAX_PETERSON_LOCKS 15
 struct petersonlock peterson_locks[MAX_PETERSON_LOCKS];
+void init_peterson_locks();
 
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
@@ -59,6 +60,8 @@ procinit(void)
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
   }
+  // initialize the peterson locks to 0
+  init_peterson_locks();
 }
 
 // Must be called with interrupts disabled,
@@ -689,9 +692,6 @@ procdump(void)
 void 
 init_peterson_locks() {
   for (int i = 0; i < MAX_PETERSON_LOCKS; i++) {
-    peterson_locks[i].interested[0] = 0;
-    peterson_locks[i].interested[1] = 0;
-    peterson_locks[i].barrier = 0;
     peterson_locks[i].acquired = 0;
   }
 }
@@ -700,11 +700,14 @@ init_peterson_locks() {
 int 
 peterson_create(void) {
   for (int i = 0; i < MAX_PETERSON_LOCKS; i++) {
+    // Check if the lock is available usind atomic operations
     if (__sync_lock_test_and_set(&peterson_locks[i].acquired, 1) == 0) {
+      // Initialize the lock
       peterson_locks[i].interested[0] = 0;
       peterson_locks[i].interested[1] = 0;
       peterson_locks[i].barrier = 0;
       peterson_locks[i].acquired = 1;
+      // ensure memory operations are completed before returning
       __sync_synchronize();
       return i;
     }
@@ -714,22 +717,25 @@ peterson_create(void) {
 // Acquire a Peterson lock.
 int 
 peterson_acquire(int lock_id, int role) {
+  // Check if the lock_id is valid and role is either 0 or 1
   if (lock_id < 0 || lock_id >= MAX_PETERSON_LOCKS || (role != 0 && role != 1))
     return -1;
-
   struct petersonlock *lock = &peterson_locks[lock_id];
+  // Check if the lock is not acquired
   if (!lock->acquired)
     return -1;
-
+  //TODO: maybe use atomic operations to check if the lock is acquired
   lock->interested[role] = 1;
   lock->barrier = role;
   __sync_synchronize();
-
   int other = 1 - role;
   while (1) {
     __sync_synchronize();
+    // Check if the other process is interested in the lock
     if (!(lock->barrier == role && lock->interested[other] == 1))
       break;
+      //yeild the CPU to allow other process to run 
+      //instead of busy waiting
     yield();
   }
 
@@ -743,6 +749,7 @@ peterson_release(int lock_id, int role) {
     return -1;
   
   struct petersonlock *lock = &peterson_locks[lock_id];
+  //release the lock of the current process
   lock->interested[role] = 0;
   __sync_synchronize();
   return 0;
@@ -760,6 +767,8 @@ peterson_destroy(int lock_id){
   lock->interested[1] = 0;
   lock->barrier = 0;
   __sync_synchronize();
+  //make the acquired to 0
+  //to make the destroyed lock 
   __sync_lock_release(&lock->acquired);
   return 0;
 }
