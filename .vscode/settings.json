@@ -5,4 +5,5 @@
         "defs.h": "c",
         "petersonlock.h": "c"
     },
+    "C_Cpp.errorSquiggles": "enabled",
 }
