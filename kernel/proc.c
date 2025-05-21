@@ -724,8 +724,9 @@ peterson_acquire(int lock_id, int role) {
   // Check if the lock is not acquired
   if (!lock->acquired)
     return -1;
-  //TODO: maybe use atomic operations to check if the lock is acquired
   lock->interested[role] = 1;
+  //make every line atomic 
+  __sync_synchronize();
   lock->barrier = role;
   __sync_synchronize();
   int other = 1 - role;
